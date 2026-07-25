@@ -1,0 +1,5 @@
+production:
+  periodic_invalid_class:
+    class: StoreResultJorrrrrrb
+    queue: default
+    schedule: every second

@@ -171,6 +171,77 @@ class ConfigurationTest < ActiveSupport::TestCase
     assert configuration.valid?
   end
 
+  test "environment option selects which config section to read" do
+    # Without the option, a production-scoped recurring file is invisible under
+    # RAILS_ENV=test, so no scheduler is configured.
+    configuration = SolidQueue::Configuration.new(recurring_schedule_file: config_file_path(:recurring_with_production_only))
+    assert_processes configuration, :scheduler, 0
+
+    # With environment: "production", the production section is read and its
+    # recurring tasks are configured and validated.
+    configuration = SolidQueue::Configuration.new(
+      environment: "production",
+      recurring_schedule_file: config_file_path(:recurring_with_production_only)
+    )
+    assert configuration.valid?
+    assert_processes configuration, :scheduler, 1
+  end
+
+  test "environment option selects which queue.yml section to read" do
+    # Current env (test) reads the test section.
+    configuration = SolidQueue::Configuration.new(config_file: config_file_path(:queue_with_production), skip_recurring: true)
+    assert_processes configuration, :worker, 1, queues: "default_queue"
+
+    # environment: "production" reads the production section instead.
+    configuration = SolidQueue::Configuration.new(
+      environment: "production",
+      config_file: config_file_path(:queue_with_production),
+      skip_recurring: true
+    )
+    assert_processes configuration, :worker, 1, queues: "prod_only"
+  end
+
+  test "environment option applies to an env-scoped recurring file even when the queue file is env-agnostic" do
+    # A flat queue.yml (no env sections) alongside a production-scoped recurring.yml:
+    # the env lookup falls through to the flat queue config as-is, while the
+    # recurring file's production section is selected by the environment option.
+    configuration = SolidQueue::Configuration.new(
+      environment: "production",
+      config_file: config_file_path(:queue_without_environments),
+      recurring_schedule_file: config_file_path(:recurring_with_production_only)
+    )
+
+    assert configuration.valid?
+    assert_processes configuration, :worker, 1, queues: "flat_queue"
+    assert_processes configuration, :scheduler, 1
+  end
+
+  test "environment option surfaces recurring errors from the target section" do
+    configuration = SolidQueue::Configuration.new(
+      environment: "production",
+      recurring_schedule_file: config_file_path(:recurring_with_production_invalid)
+    )
+
+    assert_not configuration.valid?
+    error = configuration.errors.full_messages.first
+    assert error.include?("Invalid recurring tasks")
+    assert error.include?("periodic_invalid_class: Class name doesn't correspond to an existing class")
+  end
+
+  test "environment option reads SOLID_QUEUE_ENVIRONMENT when not given explicitly" do
+    with_env("SOLID_QUEUE_ENVIRONMENT" => "production") do
+      configuration = SolidQueue::Configuration.new(recurring_schedule_file: config_file_path(:recurring_with_production_only))
+      assert_processes configuration, :scheduler, 1
+    end
+  end
+
+  test "environment defaults to the current Rails env" do
+    with_env("SOLID_QUEUE_ENVIRONMENT" => nil) do
+      configuration = SolidQueue::Configuration.new(recurring_schedule_file: config_file_path(:recurring_with_production_only))
+      assert_processes configuration, :scheduler, 0
+    end
+  end
+
   test "reports an undersized thread pool as a warning rather than an error" do
     configuration = SolidQueue::Configuration.new(workers: [ { queues: "background", threads: 50, polling_interval: 10 } ], skip_recurring: true)
 

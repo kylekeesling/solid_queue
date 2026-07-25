@@ -425,7 +425,17 @@ bin/rails solid_queue:check
 
 Both commands validate the configuration for the current Rails environment. On success they print `Solid Queue configuration is valid.` and exit `0`; otherwise they print the errors and exit non-zero. When the number of threads is larger than the [database connection pool](#database-configuration), they also print an advisory warning about it—the same one the supervisor logs on boot. They're tolerant of a missing database connection, so they can run on CI or deploy hosts without database credentials.
 
-`bin/jobs check` accepts the same options as `bin/jobs start` (e.g. `--config_file`, `--recurring_schedule_file`, `--skip-recurring`). The rake task honors the same environment variables Solid Queue already uses: `SOLID_QUEUE_CONFIG`, `SOLID_QUEUE_RECURRING_SCHEDULE`, and `SOLID_QUEUE_SKIP_RECURRING`. To validate a specific environment's configuration, set `RAILS_ENV`, for example `RAILS_ENV=production bin/jobs check`.
+`bin/jobs check` accepts the same options as `bin/jobs start` (e.g. `--config_file`, `--recurring_schedule_file`, `--skip-recurring`). The rake task honors the same environment variables Solid Queue already uses: `SOLID_QUEUE_CONFIG`, `SOLID_QUEUE_RECURRING_SCHEDULE`, and `SOLID_QUEUE_SKIP_RECURRING`.
+
+By default the check reads the section for the current Rails environment from `config/queue.yml` and `config/recurring.yml`. The simplest way to validate another environment's configuration is to run under that `RAILS_ENV`, for example `RAILS_ENV=production bin/jobs check`. But if you want to validate a production-scoped config from CI—which typically runs under `RAILS_ENV=test`—booting as production isn't always possible (it may need production credentials or a database that doesn't exist there). For that case, `check` can read a different environment's section while still running under the current `RAILS_ENV`, via the `-e/--environment` option or the `SOLID_QUEUE_ENVIRONMENT` variable:
+
+```bash
+# Validate the production section of recurring.yml/queue.yml from a test-env CI job
+bin/jobs check --environment production
+SOLID_QUEUE_ENVIRONMENT=production bin/rails solid_queue:check
+```
+
+This constantizes every class-based recurring task in the target section, so a renamed or typo'd job class in `recurring.yml` fails the check instead of silently breaking the scheduler when it boots in production.
 
 
 ## Lifecycle hooks

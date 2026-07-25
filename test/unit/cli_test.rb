@@ -57,6 +57,29 @@ class CliTest < ActiveSupport::TestCase
     assert_empty out
   end
 
+  test "check validates a target environment's config section via --environment" do
+    out, err, exit_status = capture_check_run(
+      "--environment", "production",
+      "--recurring_schedule_file", config_file_path(:recurring_with_production_invalid).to_s
+    )
+
+    assert_equal 1, exit_status
+    assert_match "Solid Queue configuration is invalid", err
+    assert_match "periodic_invalid_class", err
+    assert_empty out
+  end
+
+  test "check reads SOLID_QUEUE_ENVIRONMENT when --environment is not given" do
+    with_env("SOLID_QUEUE_ENVIRONMENT" => "production") do
+      out, err, exit_status = capture_check_run(
+        "--recurring_schedule_file", config_file_path(:recurring_with_production_invalid).to_s
+      )
+
+      assert_equal 1, exit_status
+      assert_match "periodic_invalid_class", err
+    end
+  end
+
   private
     def configuration_from_cli(**cli_options)
       cli = SolidQueue::Cli.new([], cli_options)

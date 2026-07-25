@@ -126,7 +126,8 @@ module SolidQueue
           recurring_schedule_file: Rails.root.join(ENV["SOLID_QUEUE_RECURRING_SCHEDULE"] || DEFAULT_RECURRING_SCHEDULE_FILE_PATH),
           only_work: false,
           only_dispatch: false,
-          skip_recurring: ActiveModel::Type::Boolean.new.cast(ENV["SOLID_QUEUE_SKIP_RECURRING"])
+          skip_recurring: ActiveModel::Type::Boolean.new.cast(ENV["SOLID_QUEUE_SKIP_RECURRING"]),
+          environment: ENV["SOLID_QUEUE_ENVIRONMENT"].presence || Rails.env
         }
       end
 
@@ -144,6 +145,15 @@ module SolidQueue
 
       def skip_recurring_tasks?
         options[:skip_recurring] || only_work?
+      end
+
+      # The environment whose section is read from the config and recurring
+      # schedule files. Defaults to the current Rails.env, but can be overridden
+      # (via the `environment` option / SOLID_QUEUE_ENVIRONMENT) to validate a
+      # different environment's configuration—e.g. checking production-scoped
+      # config from CI, which runs under RAILS_ENV=test.
+      def target_environment
+        options[:environment].presence || Rails.env
       end
 
       def workers
@@ -215,7 +225,7 @@ module SolidQueue
         end
       end
 
-      def config_from(file_or_hash, keys: [], fallback: {}, env: Rails.env)
+      def config_from(file_or_hash, keys: [], fallback: {}, env: target_environment)
         load_config_from(file_or_hash).then do |config|
           config = config[env.to_sym] ? config[env.to_sym] : config
           config = config.slice(*keys) if keys.any? && config.present?

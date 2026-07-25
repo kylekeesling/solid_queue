@@ -1,0 +1,10 @@
+default: &default
+  workers:
+    - queues: default_queue
+      threads: 3
+test:
+  <<: *default
+production:
+  workers:
+    - queues: prod_only
+      threads: 7
